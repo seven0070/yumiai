@@ -62,16 +62,16 @@ export class RikoService {
   }
 
   private handleMessage(data: any) {
-    const { type, content } = data;
+    const msg: RikoMessage = data;
     
-    if (type === 'text_response') {
-      this.emit('text', content);
-      this.triggerMouthAnimation(0.5);
-    } else if (type === 'audio_response') {
-      this.emit('audio', content);
-      this.triggerMouthAnimation(0.8);
-    } else if (type === 'emotion') {
-      this.emit('emotion', content);
+    if (msg.type === 'speaking') {
+      this.emit('speaking', msg);
+      this.triggerMouthAnimation(msg.duration || 2000);
+    } else if (msg.type === 'listening') {
+      this.emit('listening', msg);
+    } else if (msg.type === 'idle') {
+      this.emit('idle', msg);
+      this.triggerMouthAnimation(0);
     }
   }
 
@@ -79,7 +79,7 @@ export class RikoService {
     console.log('RikoService: Sending message to Riko:', message);
     
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const payload: RikoMessage = {
+      const payload = {
         type: 'text',
         content: message,
         timestamp: Date.now()
@@ -94,11 +94,11 @@ export class RikoService {
         
         const handleResponse = (data: any) => {
           clearTimeout(timeout);
-          this.off('text', handleResponse);
-          resolve({ text: data, emotion: 'neutral' });
+          this.off('speaking', handleResponse);
+          resolve({ text: data.text || '', emotion: 'neutral' });
         };
         
-        this.on('text', handleResponse);
+        this.on('speaking', handleResponse);
       });
     } else {
       console.warn('RikoService: WebSocket not connected, falling back to HTTP');
@@ -128,16 +128,10 @@ export class RikoService {
     }
   }
 
-  triggerMouthAnimation(intensity: number) {
+  triggerMouthAnimation(duration: number) {
     if (typeof (window as any).__triggerMouthAnimation === 'function') {
-      (window as any).__triggerMouthAnimation(intensity);
+      (window as any).__triggerMouthAnimation(duration);
     }
-    
-    setTimeout(() => {
-      if (typeof (window as any).__triggerMouthAnimation === 'function') {
-        (window as any).__triggerMouthAnimation(0);
-      }
-    }, 2000);
   }
 
   on(event: string, callback: (data: any) => void) {
