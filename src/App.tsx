@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { AppMode, SystemStats } from './types';
+import { AppMode, SystemStats } from './types/index';
 import ChatInterface from './components/ChatInterface';
 import LiveInterface from './components/LiveInterface';
 import { MessageSquare, Zap, Activity, Wifi, Video, Mic } from 'lucide-react';
