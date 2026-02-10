@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
-import { Avatar3D } from './Avatar3D';
+import { OrbitControls } from '@react-three/drei';
+import { Avatar3D, Avatar3DRef } from './Avatar3D';
 import { SystemStats } from '../types';
 import { rikoService } from '../services/riko';
 import { Mic, MicOff, Send } from 'lucide-react';
@@ -16,6 +16,8 @@ const LiveInterface: React.FC<LiveInterfaceProps> = ({ apiKey, onStatsUpdate }) 
   const [isListening, setIsListening] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [latency, setLatency] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const avatarRef = useRef<Avatar3DRef>(null);
 
   useEffect(() => {
     onStatsUpdate({
@@ -23,18 +25,29 @@ const LiveInterface: React.FC<LiveInterfaceProps> = ({ apiKey, onStatsUpdate }) 
       audioQuality: 'OPTIMAL'
     });
 
+    // Handle Riko connection status
     const handleConnection = (data: any) => {
       setConnectionStatus(data.status === 'connected' ? 'connected' : 'disconnected');
     };
 
-    rikoService.on('connection', handleConnection);
+    // Handle speaking messages from Riko
+    const handleSpeaking = (msg: { type: string; text?: string; duration?: number }) => {
+      if (msg.duration) {
+        avatarRef.current?.speak(msg.duration);
+      }
+    };
 
+    rikoService.on('connection', handleConnection);
+    rikoService.on('speaking', handleSpeaking);
+
+    // Simulate initial connection attempt
     setTimeout(() => {
       setConnectionStatus('disconnected');
     }, 2000);
 
     return () => {
       rikoService.off('connection', handleConnection);
+      rikoService.off('speaking', handleSpeaking);
       onStatsUpdate({
         videoStatus: 'OFFLINE',
         audioQuality: 'N/A'
@@ -60,6 +73,8 @@ const LiveInterface: React.FC<LiveInterfaceProps> = ({ apiKey, onStatsUpdate }) 
 
     if (response) {
       console.log('Received response from Riko:', response);
+      // Trigger mouth animation for response
+      avatarRef.current?.speak(2000);
     } else {
       console.log('No response from Riko (server may be offline)');
     }
@@ -83,73 +98,83 @@ const LiveInterface: React.FC<LiveInterfaceProps> = ({ apiKey, onStatsUpdate }) 
     console.log('Mouth animation triggered with intensity:', intensity);
   }, []);
 
-  return (
-    <div className="w-full h-full flex flex-col rounded-xl overflow-hidden border border-fuchsia-500/20 bg-[#0d0221]/40 backdrop-blur-md shadow-[0_0_50px_rgba(232,121,249,0.15)]">
-      
-      <div className="flex-1 relative">
-        <Canvas
-          className="w-full h-full"
-          gl={{ 
-            antialias: true, 
-            alpha: true,
-            powerPreference: 'high-performance'
-          }}
-        >
-          <color attach="background" args={['#0d0221']} />
-          
-          <fog attach="fog" args={['#0d0221', 5, 15]} />
-          
-          <PerspectiveCamera makeDefault position={[0, 0, 5]} fov={50} />
-          
-          <ambientLight intensity={0.3} color="#9333ea" />
-          <pointLight position={[5, 5, 5]} intensity={1.2} color="#ec4899" />
-          <pointLight position={[-5, -5, 5]} intensity={0.8} color="#06b6d4" />
-          <spotLight
-            position={[0, 10, 0]}
-            angle={0.3}
-            penumbra={1}
-            intensity={0.5}
-            color="#e879f9"
-            castShadow
-          />
-          
-          <Avatar3D onMouthAnimation={handleMouthAnimation} />
-          
-          <OrbitControls
-            enableZoom={true}
-            enablePan={false}
-            minDistance={3}
-            maxDistance={8}
-            maxPolarAngle={Math.PI / 1.8}
-            minPolarAngle={Math.PI / 3}
-          />
-        </Canvas>
+  const handleAvatarLoad = useCallback(() => {
+    console.log('Avatar3D loaded successfully');
+    setIsLoading(false);
+  }, []);
 
-        <div className="absolute top-4 left-4 bg-black/60 border border-fuchsia-500/30 rounded-lg px-3 py-2 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full animate-pulse ${
-              connectionStatus === 'connected' ? 'bg-green-400' :
-              connectionStatus === 'connecting' ? 'bg-yellow-400' :
-              'bg-red-400'
-            }`} />
-            <span className="text-xs font-mono text-cyan-300">
-              {connectionStatus === 'connected' ? 'RIKO CONNECTED' :
-               connectionStatus === 'connecting' ? 'CONNECTING...' :
-               'RIKO OFFLINE'}
-            </span>
+  return (
+    <div className="relative w-full h-full bg-[#0d0221] rounded-lg border border-fuchsia-500/30 shadow-[0_0_30px_rgba(236,72,153,0.3)] overflow-hidden">
+      {/* Scanline effect */}
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-400/5 to-transparent h-[200%] w-full animate-scanline pointer-events-none" />
+      
+      <Canvas
+        className="w-full h-full"
+        gl={{ 
+          antialias: true, 
+          alpha: true,
+          powerPreference: 'high-performance'
+        }}
+      >
+        <color attach="background" args={['#0d0221']} />
+        
+        {/* Lighting setup per requirements */}
+        <ambientLight intensity={0.4} color="#a855f7" />
+        <pointLight position={[2, 2, 2]} intensity={1.5} color="#ec4899" />
+        <pointLight position={[-2, -1, -2]} intensity={0.8} color="#8b5cf6" />
+        
+        {/* Avatar */}
+        <Avatar3D 
+          ref={avatarRef}
+          onLoad={handleAvatarLoad}
+          onMouthAnimation={handleMouthAnimation}
+        />
+        
+        {/* Camera controls */}
+        <OrbitControls enableZoom={false} />
+      </Canvas>
+      
+      {/* Loading state */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0d0221]/80 backdrop-blur-sm">
+          <div className="text-fuchsia-400 font-mono animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 rounded-full bg-fuchsia-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-3 h-3 rounded-full bg-fuchsia-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <div className="w-3 h-3 rounded-full bg-fuchsia-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+            </div>
+            <p className="mt-4 text-center text-sm">Loading Avatar...</p>
           </div>
         </div>
+      )}
 
-        {latency > 0 && (
-          <div className="absolute top-4 right-4 bg-black/60 border border-fuchsia-500/30 rounded-lg px-3 py-2 backdrop-blur-sm">
-            <span className="text-xs font-mono text-cyan-300">
-              LATENCY: {latency}ms
-            </span>
-          </div>
-        )}
+      {/* Connection status */}
+      <div className="absolute top-4 left-4 bg-black/60 border border-fuchsia-500/30 rounded-lg px-3 py-2 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full animate-pulse ${
+            connectionStatus === 'connected' ? 'bg-green-400' :
+            connectionStatus === 'connecting' ? 'bg-yellow-400' :
+            'bg-red-400'
+          }`} />
+          <span className="text-xs font-mono text-cyan-300">
+            {connectionStatus === 'connected' ? 'RIKO CONNECTED' :
+             connectionStatus === 'connecting' ? 'CONNECTING...' :
+             'RIKO OFFLINE'}
+          </span>
+        </div>
       </div>
 
-      <div className="p-4 border-t border-fuchsia-500/20 bg-black/40">
+      {/* Latency display */}
+      {latency > 0 && (
+        <div className="absolute top-4 right-4 bg-black/60 border border-fuchsia-500/30 rounded-lg px-3 py-2 backdrop-blur-sm">
+          <span className="text-xs font-mono text-cyan-300">
+            LATENCY: {latency}ms
+          </span>
+        </div>
+      )}
+
+      {/* Input controls */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-fuchsia-500/20 bg-black/60 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <button
             onClick={toggleListening}

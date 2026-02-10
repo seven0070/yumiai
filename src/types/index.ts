@@ -10,10 +10,9 @@ export interface SystemStats {
 }
 
 export interface RikoMessage {
-  type: 'text' | 'audio' | 'status';
-  content?: string;
-  audioData?: ArrayBuffer;
-  timestamp: number;
+  type: 'speaking' | 'listening' | 'idle';
+  text?: string;
+  duration?: number;
 }
 
 export interface RikoResponse {
